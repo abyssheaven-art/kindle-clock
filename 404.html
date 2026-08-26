@@ -1,0 +1,632 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>Kindle Clock</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #fff;
+      color: #000;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      -webkit-text-size-adjust: none;
+    }
+
+    #stage {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    #cleaningFlash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background: #000;
+      z-index: 2147483647;
+    }
+
+    #clock {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      text-align: center;
+      white-space: nowrap;
+      font-weight: bold;
+      line-height: 0.86;
+      letter-spacing: 0;
+      font-size: 220px;
+      -webkit-transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%);
+    }
+
+    #quietSleep {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      background-color: #fff;
+      background-image: url("assets/shiba-quiet-sleep.png");
+      background-position: center center;
+      background-repeat: no-repeat;
+      -webkit-background-size: contain;
+      background-size: contain;
+    }
+
+    #stage.quietSleep #quietSleep {
+      display: block;
+    }
+
+    #stage.quietSleep #clock,
+    #stage.quietSleep #dog,
+    #stage.quietSleep #tracks,
+    #stage.quietSleep #shibaBall {
+      display: none;
+    }
+
+    #dog {
+      position: absolute;
+      left: -260px;
+      bottom: 2%;
+      width: 250px;
+      height: 139px;
+    }
+
+    #dog img {
+      width: 250px;
+      height: 139px;
+      display: block;
+      border: 0;
+    }
+
+    #dog .sleepingDog {
+      display: none;
+      height: 150px;
+    }
+
+    #stage.sleeping #dog {
+      left: 50% !important;
+      width: 250px;
+      height: 150px;
+      -webkit-transform: translateX(-50%);
+      transform: translateX(-50%);
+    }
+
+    #stage.sleeping #dog .walkingDog,
+    #stage.sleeping #tracks,
+    #stage.sleeping #shibaBall {
+      display: none;
+    }
+
+    #stage.sleepingCurled #dog .sleepingCurled,
+    #stage.sleepingSide #dog .sleepingSide,
+    #stage.sleepingBack #dog .sleepingBack {
+      display: block;
+    }
+
+    #sleepingZ {
+      position: absolute;
+      top: -64px;
+      right: -58px;
+      width: 104px;
+      height: 72px;
+      display: none;
+      color: #000;
+      font-family: Arial, Helvetica, sans-serif;
+      font-weight: bold;
+      line-height: 1;
+    }
+
+    #stage.sleeping #sleepingZ {
+      display: block;
+    }
+
+    #stage.awake #dog,
+    #stage.awake #tracks,
+    #stage.awake #shibaBall {
+      display: none;
+    }
+
+    #sleepingZ span {
+      position: absolute;
+    }
+
+    #sleepingZ .z1 {
+      left: 0;
+      bottom: 0;
+      font-size: 23px;
+    }
+
+    #sleepingZ .z2 {
+      left: 30px;
+      bottom: 17px;
+      font-size: 30px;
+    }
+
+    #sleepingZ .z3 {
+      left: 66px;
+      bottom: 38px;
+      font-size: 38px;
+    }
+
+    #shibaBall {
+      position: absolute;
+      left: 0;
+      bottom: 4%;
+      width: 74px;
+      height: 74px;
+      display: none;
+      background: #000;
+      color: #fff;
+      font-family: serif;
+      font-size: 42px;
+      line-height: 74px;
+      font-weight: bold;
+      text-align: center;
+      -webkit-border-radius: 50%;
+      border-radius: 50%;
+    }
+
+    #stage.minute48 #shibaBall {
+      display: block;
+    }
+
+    #tracks {
+      position: absolute;
+      left: 0;
+      bottom: 3%;
+      width: 100%;
+      height: 46px;
+      overflow: hidden;
+    }
+
+    .paw {
+      position: absolute;
+      width: 24px;
+      height: 22px;
+      display: none;
+    }
+
+    .paw .pad,
+    .paw .toe {
+      position: absolute;
+      background: #000;
+      -webkit-border-radius: 50%;
+      border-radius: 50%;
+    }
+
+    .paw .pad {
+      left: 6px;
+      top: 10px;
+      width: 13px;
+      height: 10px;
+    }
+
+    .paw .toe {
+      width: 6px;
+      height: 7px;
+      top: 1px;
+    }
+
+    .paw .toe1 {
+      left: 2px;
+      top: 5px;
+    }
+
+    .paw .toe2 {
+      left: 9px;
+      top: 1px;
+    }
+
+    .paw .toe3 {
+      left: 16px;
+      top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="clock"><span id="hours">--</span><span id="colon">:</span><span id="minutes">--</span></div>
+    <div id="quietSleep" aria-label="Sleeping Shiba Inu"></div>
+    <div id="tracks"></div>
+    <div id="shibaBall">柴</div>
+    <div id="dog">
+      <img class="walkingDog" src="assets/shiba-silhouette.png?v=2tone3" alt="">
+      <img class="sleepingDog sleepingCurled" src="assets/shiba-sleeping.png?v=8gray1" alt="">
+      <img class="sleepingDog sleepingSide" src="assets/shiba-sleeping-side.png?v=8gray1" alt="">
+      <img class="sleepingDog sleepingBack" src="assets/shiba-sleeping-back.png?v=8gray1" alt="">
+      <div id="sleepingZ" aria-hidden="true"><span class="z1">Z</span><span class="z2">Z</span><span class="z3">Z</span></div>
+    </div>
+  </div>
+  <div id="cleaningFlash"></div>
+
+  <script>
+    (function () {
+      var stageEl = document.getElementById("stage");
+      var clockEl = document.getElementById("clock");
+      var hoursEl = document.getElementById("hours");
+      var colonEl = document.getElementById("colon");
+      var minutesEl = document.getElementById("minutes");
+      var dogEl = document.getElementById("dog");
+      var tracksEl = document.getElementById("tracks");
+      var shibaBallEl = document.getElementById("shibaBall");
+      var cleaningFlashEl = document.getElementById("cleaningFlash");
+      var pawEls = [];
+      var lastMinute = "";
+      var lastSecond = "";
+      var isMinute48 = false;
+      var isSleeping = false;
+      var sleepingPoseClass = "";
+      var sleepingStep = 0;
+      var timeOffsetMs = 0;
+      var tickTimer = null;
+      var lastCleaningKey = "";
+      var cleaningInProgress = false;
+      var cleaningFlashTimers = [];
+
+      function pad(value) {
+        return value < 10 ? "0" + value : "" + value;
+      }
+
+      function viewportWidth() {
+        return window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth || 600;
+      }
+
+      function viewportHeight() {
+        return window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 800;
+      }
+
+      function correctedTime() {
+        return new Date().getTime() + timeOffsetMs;
+      }
+
+      function reloadForTimeSync(cleaningKey) {
+        var baseUrl;
+
+        try {
+          if (window.localStorage.getItem("kindleClockReloadKey") === cleaningKey) {
+            updateClock(true);
+            return;
+          }
+          window.localStorage.setItem("kindleClockReloadKey", cleaningKey);
+        } catch (e) {
+        }
+
+        baseUrl = window.location.href.split("#")[0].split("?")[0];
+        window.location.replace(baseUrl + "?reload=" + new Date().getTime());
+      }
+
+      function runCleaningFlash(cleaningKey) {
+        var phases;
+        var elapsed;
+        var i;
+
+        if (cleaningInProgress) {
+          return;
+        }
+
+        cleaningInProgress = true;
+        phases = [
+          { color: "#000", duration: 2200 },
+          { color: "#fff", duration: 2200 },
+          { color: "#000", duration: 1600 },
+          { color: "#fff", duration: 1600 }
+        ];
+        elapsed = 0;
+
+        while (cleaningFlashTimers.length) {
+          clearTimeout(cleaningFlashTimers.pop());
+        }
+
+        cleaningFlashEl.style.display = "block";
+        cleaningFlashEl.style.background = phases[0].color;
+        cleaningFlashEl.offsetHeight;
+
+        for (i = 1; i < phases.length; i += 1) {
+          elapsed += phases[i - 1].duration;
+          (function (phase, delay) {
+            cleaningFlashTimers.push(setTimeout(function () {
+              cleaningFlashEl.style.background = phase.color;
+              cleaningFlashEl.offsetHeight;
+            }, delay));
+          }(phases[i], elapsed));
+        }
+
+        elapsed += phases[phases.length - 1].duration;
+        cleaningFlashTimers.push(setTimeout(function () {
+            cleaningFlashEl.style.display = "none";
+            cleaningInProgress = false;
+            if (cleaningKey) {
+              reloadForTimeSync(cleaningKey);
+            } else {
+              updateClock(true);
+            }
+        }, elapsed));
+      }
+
+      function checkCleaningTime(now) {
+        var hour = now.getUTCHours();
+        var cleaningKey;
+
+        if (now.getUTCMinutes() !== 0 || (hour !== 6 && hour !== 12 && hour !== 18)) {
+          return;
+        }
+
+        cleaningKey = now.getUTCFullYear() + "-" + now.getUTCMonth() + "-" + now.getUTCDate() + "-" + hour;
+        if (cleaningKey === lastCleaningKey) {
+          return;
+        }
+
+        try {
+          if (window.localStorage.getItem("kindleClockCleaningKey") === cleaningKey) {
+            lastCleaningKey = cleaningKey;
+            return;
+          }
+          window.localStorage.setItem("kindleClockCleaningKey", cleaningKey);
+        } catch (e) {
+        }
+
+        lastCleaningKey = cleaningKey;
+        runCleaningFlash(cleaningKey);
+      }
+
+      function jstDate() {
+        return new Date(correctedTime() + 9 * 60 * 60000);
+      }
+
+      function setStage() {
+        var width = viewportWidth();
+        var height = viewportHeight();
+
+        if (height > width) {
+          stageEl.style.width = height + "px";
+          stageEl.style.height = width + "px";
+          stageEl.style.top = ((height - width) / 2) + "px";
+          stageEl.style.left = ((width - height) / 2) + "px";
+          stageEl.style.webkitTransform = "rotate(90deg)";
+          stageEl.style.transform = "rotate(90deg)";
+        } else {
+          stageEl.style.width = width + "px";
+          stageEl.style.height = height + "px";
+          stageEl.style.top = "0";
+          stageEl.style.left = "0";
+          stageEl.style.webkitTransform = "none";
+          stageEl.style.transform = "none";
+        }
+      }
+
+      function fitClock() {
+        var stageWidth = stageEl.offsetWidth || viewportWidth();
+        var stageHeight = stageEl.offsetHeight || viewportHeight();
+        var maxWidth = stageWidth * 0.98;
+        var maxHeight = stageHeight * 0.84;
+        var low = 80;
+        var high = Math.floor(stageHeight * 1.25);
+        var best = 220;
+        var mid;
+
+        while (low <= high) {
+          mid = Math.floor((low + high) / 2);
+          clockEl.style.fontSize = mid + "px";
+
+          if (clockEl.scrollWidth <= maxWidth && clockEl.offsetHeight <= maxHeight) {
+            best = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
+        }
+
+        clockEl.style.fontSize = best + "px";
+      }
+
+      function layout() {
+        setStage();
+        fitClock();
+      }
+
+      function createPaws() {
+        var i;
+        var paw;
+
+        for (i = 0; i < 24; i += 1) {
+          paw = document.createElement("div");
+          paw.className = "paw";
+          paw.innerHTML = '<span class="toe toe1"></span><span class="toe toe2"></span><span class="toe toe3"></span><span class="pad"></span>';
+          tracksEl.appendChild(paw);
+          pawEls.push(paw);
+        }
+      }
+
+      function updatePaws(second, startX, endX) {
+        var i;
+        var stampSecond;
+        var paw;
+        var x;
+        var y;
+        var pawInterval = isMinute48 ? 3 : 5;
+        var activeCount = Math.floor(second / pawInterval) + 1;
+
+        for (i = 0; i < pawEls.length; i += 1) {
+          paw = pawEls[i];
+
+          if (i >= activeCount) {
+            paw.style.display = "none";
+            continue;
+          }
+
+          stampSecond = i * pawInterval;
+          x = startX + (endX - startX) * stampSecond / 59 + 24;
+          y = i % 2 === 0 ? 18 : 2;
+
+          if (x < -24 || x > (stageEl.offsetWidth || viewportWidth())) {
+            paw.style.display = "none";
+            continue;
+          }
+
+          paw.style.left = Math.round(x) + "px";
+          paw.style.top = y + "px";
+          paw.style.display = "block";
+        }
+      }
+
+      function updateDog(second) {
+        var stageWidth = stageEl.offsetWidth || viewportWidth();
+        var dogWidth = dogEl.offsetWidth || 250;
+        var ballWidth = shibaBallEl.offsetWidth || 74;
+        var enterX = -dogWidth;
+        var exitX = stageWidth;
+        var x;
+        var ballX;
+
+        x = enterX + (exitX - enterX) * second / 59;
+        dogEl.style.left = Math.round(x) + "px";
+
+        ballX = x + dogWidth - 18;
+        if (ballX > stageWidth + ballWidth) {
+          ballX = stageWidth + ballWidth;
+        }
+        shibaBallEl.style.left = Math.round(ballX) + "px";
+
+        updatePaws(second, enterX, exitX);
+      }
+
+      function isQuietSleepTime(now) {
+        var hour = now.getUTCHours();
+        var minute = now.getUTCMinutes();
+
+        return (hour >= 1 && hour < 5) || (hour === 5 && minute < 30);
+      }
+
+      function updateClock(forceLayout) {
+        var now = jstDate();
+        var minuteKey = now.getUTCFullYear() + "-" + now.getUTCMonth() + "-" + now.getUTCDate() + "-" + now.getUTCHours() + "-" + now.getUTCMinutes();
+
+        checkCleaningTime(now);
+
+        if (minuteKey !== lastMinute) {
+          lastMinute = minuteKey;
+          if (isQuietSleepTime(now)) {
+            stageEl.className = "quietSleep";
+          } else {
+            isSleeping = now.getUTCHours() === 23 || now.getUTCHours() < 6;
+            if (isSleeping) {
+              sleepingStep = (now.getUTCHours() + 1) % 24;
+              sleepingPoseClass = sleepingStep % 3 === 0 ? "sleepingBack" : (sleepingStep % 3 === 1 ? "sleepingCurled" : "sleepingSide");
+            }
+            isMinute48 = false;
+            stageEl.className = isSleeping ? "sleeping " + sleepingPoseClass : "awake";
+          }
+          hoursEl.innerHTML = pad(now.getUTCHours());
+          minutesEl.innerHTML = pad(now.getUTCMinutes());
+          colonEl.style.visibility = "visible";
+          forceLayout = true;
+        }
+
+        if (forceLayout) {
+          layout();
+        }
+      }
+
+      function scheduleTick() {
+        var now = jstDate();
+        var delay;
+
+        if (isQuietSleepTime(now)) {
+          delay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 5, 30, 0, 100) - now.getTime();
+        } else {
+          delay = 60000 - (correctedTime() % 60000) + 100;
+        }
+
+        if (delay < 100) {
+          delay = 100;
+        }
+
+        if (tickTimer) {
+          clearTimeout(tickTimer);
+        }
+
+        tickTimer = setTimeout(function () {
+          updateClock(false);
+          scheduleTick();
+        }, delay);
+      }
+
+      function syncServerTime() {
+        var xhr;
+        var startedAt = new Date().getTime();
+
+        try {
+          xhr = new XMLHttpRequest();
+          xhr.open("HEAD", "?sync=" + startedAt, true);
+          xhr.setRequestHeader("Cache-Control", "no-cache");
+          xhr.onreadystatechange = function () {
+            var dateHeader;
+            var serverTime;
+            var finishedAt;
+            var midpoint;
+
+            if (xhr.readyState < 2) {
+              return;
+            }
+
+            dateHeader = xhr.getResponseHeader("Date");
+
+            if (!dateHeader) {
+              return;
+            }
+
+            serverTime = Date.parse(dateHeader);
+
+            if (isNaN(serverTime)) {
+              return;
+            }
+
+            finishedAt = new Date().getTime();
+            midpoint = startedAt + (finishedAt - startedAt) / 2;
+            timeOffsetMs = serverTime - midpoint;
+            updateClock(true);
+            scheduleTick();
+          };
+          xhr.send(null);
+        } catch (e) {
+        }
+      }
+
+      updateClock(true);
+      if (window.location.search.indexOf("clean=1") !== -1) {
+        setTimeout(runCleaningFlash, 800);
+      }
+      syncServerTime();
+      setTimeout(layout, 500);
+      scheduleTick();
+      setInterval(syncServerTime, 60 * 60 * 1000);
+
+      if (window.addEventListener) {
+        window.addEventListener("resize", layout, false);
+        window.addEventListener("orientationchange", function () {
+          setTimeout(layout, 500);
+        }, false);
+      }
+    }());
+  </script>
+</body>
+</html>
