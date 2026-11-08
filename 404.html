@@ -278,6 +278,8 @@
       var sleepingStep = 0;
       var timeOffsetMs = 0;
       var tickTimer = null;
+      var recoveryTimer = null;
+      var syncRequest = null;
       var lastCleaningKey = "";
       var cleaningInProgress = false;
       var cleaningFlashTimers = [];
@@ -523,7 +525,6 @@
         checkCleaningTime(now);
 
         if (minuteKey !== lastMinute) {
-          lastMinute = minuteKey;
           if (isQuietSleepTime(now)) {
             stageEl.className = "quietSleep";
           } else {
@@ -544,10 +545,36 @@
         if (forceLayout) {
           layout();
         }
+        if (minuteKey !== lastMinute && !isQuietSleepTime(now)) {
+          repaintClock();
+        }
+        lastMinute = minuteKey;
       }
 
-      function scheduleTick() {
-        var now = jstDate();
+      function repaintClock() {
+        var display = clockEl.style.display;
+
+        // Rebuild the clock's paint area for old e-ink WebKit renderers.
+        // Restore visibility in the same task, even if layout throws.
+        try {
+          clockEl.style.display = "none";
+          clockEl.offsetHeight;
+        } finally {
+          clockEl.style.display = display || "";
+        }
+        clockEl.offsetHeight;
+      }
+
+      function refreshClock(forceLayout) {
+        try {
+          updateClock(forceLayout);
+        } catch (e) {
+          // Retry a partially completed update on the next timer or resume event.
+          lastMinute = "";
+        }
+      }
+
+      function nextTickDelay(now) {
         var delay;
 
         if (isQuietSleepTime(now)) {
@@ -556,76 +583,164 @@
           delay = 60000 - (correctedTime() % 60000) + 100;
         }
 
-        if (delay < 100) {
-          delay = 100;
-        }
+        return delay < 100 ? 100 : delay;
+      }
 
-        if (tickTimer) {
+      function scheduleTick() {
+        if (tickTimer !== null) {
           clearTimeout(tickTimer);
         }
 
         tickTimer = setTimeout(function () {
-          updateClock(false);
+          tickTimer = null;
+          refreshClock(false);
           scheduleTick();
+          scheduleRecovery();
+        }, nextTickDelay(jstDate()));
+      }
+
+      function scheduleRecovery() {
+        var now = jstDate();
+        var delay = isQuietSleepTime(now) ? nextTickDelay(now) : 15000;
+
+        if (recoveryTimer !== null) {
+          clearTimeout(recoveryTimer);
+        }
+
+        // Check for a missed minute without changing the display in that minute.
+        // During quiet sleep both timers wait until 05:30.
+        recoveryTimer = setTimeout(function () {
+          recoveryTimer = null;
+          refreshClock(false);
+          scheduleTick();
+          scheduleRecovery();
         }, delay);
+      }
+
+      function resumeClock() {
+        refreshClock(false);
+        scheduleTick();
+        scheduleRecovery();
+      }
+
+      function handleVisibilityChange() {
+        if (!document.hidden && !document.webkitHidden) {
+          resumeClock();
+        }
       }
 
       function syncServerTime() {
         var xhr;
+        var timeoutTimer = null;
+        var finished = false;
         var startedAt = new Date().getTime();
+
+        if (syncRequest) {
+          return;
+        }
+
+        function finishRequest(abort) {
+          if (finished) {
+            return;
+          }
+          finished = true;
+          if (timeoutTimer !== null) {
+            clearTimeout(timeoutTimer);
+          }
+          if (syncRequest === xhr) {
+            syncRequest = null;
+          }
+          if (xhr) {
+            xhr.onreadystatechange = null;
+            xhr.onerror = null;
+            if (abort) {
+              try {
+                xhr.abort();
+              } catch (e) {
+              }
+            }
+          }
+        }
 
         try {
           xhr = new XMLHttpRequest();
+          syncRequest = xhr;
           xhr.open("HEAD", "?sync=" + startedAt, true);
           xhr.setRequestHeader("Cache-Control", "no-cache");
           xhr.onreadystatechange = function () {
             var dateHeader;
             var serverTime;
             var finishedAt;
-            var midpoint;
+            var elapsed;
 
-            if (xhr.readyState < 2) {
+            if (finished || xhr.readyState !== 4) {
               return;
             }
 
-            dateHeader = xhr.getResponseHeader("Date");
-
-            if (!dateHeader) {
-              return;
+            try {
+              finishedAt = new Date().getTime();
+              elapsed = finishedAt - startedAt;
+              if (xhr.status < 200 || xhr.status >= 400 || elapsed < 0 || elapsed > 15000) {
+                finishRequest(false);
+                return;
+              }
+              dateHeader = xhr.getResponseHeader("Date");
+              serverTime = dateHeader ? Date.parse(dateHeader) : NaN;
+              if (isNaN(serverTime)) {
+                finishRequest(false);
+                return;
+              }
+              finishRequest(false);
+              timeOffsetMs = serverTime - (startedAt + elapsed / 2);
+              resumeClock();
+            } catch (e) {
+              finishRequest(true);
             }
-
-            serverTime = Date.parse(dateHeader);
-
-            if (isNaN(serverTime)) {
-              return;
-            }
-
-            finishedAt = new Date().getTime();
-            midpoint = startedAt + (finishedAt - startedAt) / 2;
-            timeOffsetMs = serverTime - midpoint;
-            updateClock(true);
-            scheduleTick();
           };
+          xhr.onerror = function () {
+            finishRequest(true);
+          };
+          timeoutTimer = setTimeout(function () {
+            finishRequest(true);
+          }, 15000);
           xhr.send(null);
         } catch (e) {
+          finishRequest(true);
         }
       }
 
-      updateClock(true);
+      // Arm the timers independently of rendering and time synchronization.
+      scheduleTick();
+      scheduleRecovery();
+      refreshClock(true);
       if (window.location.search.indexOf("clean=1") !== -1) {
         setTimeout(runCleaningFlash, 800);
       }
       syncServerTime();
-      setTimeout(layout, 500);
-      scheduleTick();
+      setTimeout(function () {
+        refreshClock(true);
+      }, 500);
       setInterval(syncServerTime, 60 * 60 * 1000);
 
       if (window.addEventListener) {
-        window.addEventListener("resize", layout, false);
+        window.addEventListener("pageshow", resumeClock, false);
+        window.addEventListener("focus", resumeClock, false);
+        window.addEventListener("touchend", resumeClock, false);
+        window.addEventListener("click", resumeClock, false);
+        window.addEventListener("resize", function () {
+          refreshClock(true);
+        }, false);
         window.addEventListener("orientationchange", function () {
-          setTimeout(layout, 500);
+          setTimeout(function () {
+            refreshClock(true);
+          }, 500);
         }, false);
       }
+      if (document.addEventListener) {
+        document.addEventListener("visibilitychange", handleVisibilityChange, false);
+        document.addEventListener("webkitvisibilitychange", handleVisibilityChange, false);
+      }
+
     }());
   </script>
 </body>
